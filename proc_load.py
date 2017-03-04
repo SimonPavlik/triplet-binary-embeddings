@@ -2,14 +2,9 @@
 Load data in parallel with train.py
 '''
 
-import time
 import math
 
 import numpy as np
-#import zmq
-import pycuda.driver as drv
-import pycuda.gpuarray as gpuarray
-import hickle as hkl
 
 
 def get_params_crop_and_mirror(param_rand, data_shape, cropsize):

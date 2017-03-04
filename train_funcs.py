@@ -17,18 +17,22 @@ def proc_configs(config):
     return config
 
 
-def unpack_configs(config, ext_data='.hkl', ext_label='.npy'):
+def unpack_configs(config, ext_data='.hkl'):
 
 
-    # Load Training/Validation Filenames and Labels
+    # TODO is this modification OK?
+    # Load Training/Validation Filenames
 
     train_folder = config['train_folder']
     train_filenames = sorted(glob.glob(train_folder + '/*' + ext_data))
 
-    img_mean = np.load(config['mean_file'])
-    img_mean = img_mean[:, :, :, np.newaxis].astype('float32') 
+    test_folder = config['test_folder']
+    test_filenames = sorted(glob.glob(test_folder + '/*' + ext_data))
 
-    return (train_filenames, img_mean)
+    img_mean = np.load(config['mean_file'])
+    img_mean = img_mean[:, :, :, np.newaxis].astype('float32')
+
+    return (train_filenames, test_filenames, img_mean)
 
 
 
@@ -136,7 +140,8 @@ def small_debug(debug_model, shared_x, minibatch_range, minibatch_index, train_f
 
 def get_prediction_labels(predict_model, shared_x, minibatch_index, train_filenames, img_mean):
 
-    batch_img = hkl.load(str(train_filenames[minibatch_index])) - img_mean
+    batch_img = hkl.load(train_filenames[minibatch_index]) - img_mean
+
 #    param_rand = np.float32([0.5, 0.5, 0])
 #    batch_img = center_crop(batch_img, param_rand, batch_img.shape)
     shared_x.set_value(batch_img)

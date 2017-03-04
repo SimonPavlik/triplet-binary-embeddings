@@ -8,7 +8,8 @@ load_hash_loop: 0
 
 # Learning Parameters
 n_epochs: 10
-learning_rate: 0.0001  
+load_weights_epoch: 10 # epoch for loading weights in code extraction
+learning_rate: 0.0001
 lr_policy: step  # def: step or auto
 lr_adapt_threshold: 0.01
 lr_step: [5, 10]  # def: 10, learning rate will be reduced by 10 times at these steps
@@ -33,10 +34,12 @@ print_freq: 20  # frequency of printing training error rate
 weight_decay: 0.0005 # def: 0.0005
 
 # Directories
-mean_file: ./data/img_mean.npy
+mean_file: ./preprocessing/preprocessed_data/img_mean.npy
 finetune_weights_dir: ./pretrained_model/vggnet/
-weights_dir: ./models/
-train_folder: ./preprocessed_data/train_hkl/
+# weights_dir: ./models/
+weights_dir: ./models/classifier_2/
+train_folder: ./preprocessing/preprocessed_data/train_hkl/
+test_folder: ./preprocessing/preprocessed_data/test_hkl/
 code_save_dir: ./
 
 # bias

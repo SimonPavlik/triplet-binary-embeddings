@@ -1,5 +1,4 @@
 import sys
-sys.path.append('./lib')
 import theano
 theano.config.on_unused_input = 'warn'
 import theano.tensor as T
@@ -8,7 +7,8 @@ import numpy as np
 
 import theano.tensor.nnet as nnet
 
-from multilabel_layers import DataLayer, ConvPoolLayer, DropoutLayer, FCLayer, SoftmaxLayer, MultilabelLayer, ElemwiseLayer, PoolingLayer
+from lib.multilabel_layers import DataLayer, ConvPoolLayer, DropoutLayer, FCLayer, SoftmaxLayer, MultilabelLayer, \
+    ElemwiseLayer, PoolingLayer
 
 class CNN_model(object):
 
