@@ -4,6 +4,12 @@ import numpy as np
 import pymaxflow
 from random import choice, shuffle
 import itertools
+from random import sample, shuffle
+
+pymaxflow.SOURCE = 1
+pymaxflow.SINK = -1
+
+SAMPLE_SIZE = 5
 
 def index_group_by_label(labels):
     """ compute indices into argument grouped by value
@@ -14,11 +20,15 @@ def index_group_by_label(labels):
     return idx_by_label
 
 
-def index_loop_over_triplets(labels):
+def index_loop_over_triplets_subsample(labels):
     """ Generator for all indices of triplets (i1, i2, i3) such that
     labels[i1] == labels[i2] != labels[i3] and (i1 < i2)
     """
     idx_by_label = index_group_by_label(labels)
+
+    # reduce the dataset to SAMPLE_SIZE per class
+    for key, value in idx_by_label.items():
+        idx_by_label[key] = sample(value, min(SAMPLE_SIZE, len(value)))
 
     for l1_l2, idx_l1_l2 in idx_by_label.items():
         for l3, idx_l3 in idx_by_label.items():
@@ -31,6 +41,43 @@ def index_loop_over_triplets(labels):
                     for i3 in idx_l3:
                         yield (i1, i2, i3)
 
+def index_loop_over_triplets(labels):
+    """ Generator for indices of triplets (i1, i2, i3) with a given SAMPLE_SIZE, randomly selected from labels such
+    that
+    labels[i1] == labels[i2] != labels[i3] and (i1 < i2)
+    """
+
+    e_num = len(labels)
+
+    labels = np.array(labels)
+
+    sample_num = 2
+
+    triplet_samples_idxes = np.ones([sample_num * e_num, 3], dtype=int)
+
+    for e_idx in range(e_num):
+        relevant_sel = labels[e_idx] == labels
+        irrelevant_sel = ~relevant_sel
+        relevant_sel[e_idx] = False
+
+        relevant_idxes = np.where(relevant_sel)[0]
+        irrelevant_idxes = np.where(irrelevant_sel)[0]
+
+        sub_relevant_idxes = np.random.choice(relevant_idxes, sample_num, replace=False)
+        sub_irrelevant_idxes = np.random.choice(irrelevant_idxes, sample_num, replace=False)
+
+        bias = e_idx * np.ones(sample_num, dtype=int)
+
+        sub_triplet_samples_idxes = np.vstack([bias, sub_relevant_idxes, sub_irrelevant_idxes]).T
+
+        if e_idx == 0:
+            triplet_samples_idxes[:sample_num, :] = sub_triplet_samples_idxes
+        else:
+            triplet_samples_idxes[e_idx * sample_num:(e_idx + 1) * sample_num, :] = \
+                sub_triplet_samples_idxes
+
+    for i in range(triplet_samples_idxes.shape[0]):
+        yield tuple(triplet_samples_idxes[i, :])
 
 def find_W(current_hashes, labels, triplet_loss, hashlen):
     """ Find the weight matrix used to solve for next hash bits to append.
@@ -122,17 +169,17 @@ def generate_submodular(W):
         cur_idx = choice(list(U))
         active_indices = [cur_idx]
 
-        print ("cur", cur_idx, U)
+        # print ("cur", cur_idx, U)
         U.remove(cur_idx)
         possible_indices = np.nonzero(W[cur_idx, :].A.ravel() < 0)[0].tolist()
-        print ("poss", possible_indices)
+        # print ("poss", possible_indices)
         shuffle(possible_indices)
         for p in possible_indices:
             if np.all(W[p, :].A.ravel()[active_indices] <= 0):
                 active_indices.append(p)
                 U.discard(p)
         active_indices = sorted(active_indices)
-        print("act", active_indices)
+        # print("act", active_indices)
         yield W[active_indices, :][:, active_indices].A, active_indices
 
 def solve_iterative(W, iterations=10):
@@ -166,13 +213,13 @@ def solve_iterative(W, iterations=10):
             sub_W = sub_W.astype(np.float32)  # pymaxflow compatibility
             num_active = len(active_indices)
 
-            print("solve", active_indices, "\n", sub_W)
+            # print("solve", active_indices, "\n", sub_W)
 
             # We are solving for active_indices.
             # All others are held fixed.
             # These are the costs relative to the labels we are holding fixed.
             costs_wrt_fixed = W.dot(current_labels)[active_indices]
-            print("costs", costs_wrt_fixed)
+            # print("costs", costs_wrt_fixed)
             costs_wrt_fixed = costs_wrt_fixed.astype(np.float32)  # pymaxflow compatibility
 
             # split into positive and negative pieces
@@ -214,7 +261,7 @@ def solve_iterative(W, iterations=10):
 
             g.maxflow()
             out = (g.what_segment_vectorized() == pymaxflow.SOURCE) * 2 - 1
-            print("res", out)
+            # print("res", out)
 
             # validate solution
             best = np.inf
@@ -224,14 +271,14 @@ def solve_iterative(W, iterations=10):
                 if e < best:
                     best_v = v
                     best = e
-            print("best", best_v, best)
+            # print("best", best_v, best)
 
             # set active labels to new configuration
             current_labels[active_indices] = out
-            print ("NEW", best_v, active_indices, current_labels)
-            print("")
+            # print ("NEW", best_v, active_indices, current_labels)
+            # print("")
 
-    print ("C", current_labels, W.dot(current_labels).dot(current_labels))
+    # print ("C", current_labels, W.dot(current_labels).dot(current_labels))
     return (current_labels + 1) / 2
 
 
@@ -261,12 +308,12 @@ def find_next_bits(current_hashes, labels, triplet_loss, hashlen):
     """
 
     old_loss = compute_loss(current_hashes, labels, triplet_loss, hashlen)
-    print("old", old_loss)
+    # print("old", old_loss)
 
-    print("finding W")
+    # print("finding W")
     W = find_W(current_hashes, labels, triplet_loss, hashlen)
 
-    print("solving for new bits")
+    # print("solving for new bits")
 
     best_loss = np.inf
     better_count = 0
@@ -276,7 +323,7 @@ def find_next_bits(current_hashes, labels, triplet_loss, hashlen):
         # new_bits = [(idx % 2) for idx in range(len(current_hashes))]
         new_hashes = [h * 2 + o for h, o in zip(current_hashes, new_bits)]
         new_loss = compute_loss(new_hashes, labels, triplet_loss, hashlen + 1)
-        print("   LOSS", new_loss, new_loss < best_loss, best_loss < old_loss)
+        # print("   LOSS", new_loss, new_loss < best_loss, best_loss < old_loss)
         if new_loss < best_loss:
             best_loss = new_loss
             best_new_bits = new_bits
@@ -287,12 +334,12 @@ def find_next_bits(current_hashes, labels, triplet_loss, hashlen):
 
     # convert to 1/-1 vector
     bits_as_vec = np.matrix(best_new_bits) * 2 - 1
-    print (W.todense())
-    print("delta v. pred", best_loss - old_loss, bits_as_vec.dot(W.dot(bits_as_vec.T)), best_loss)
+    # print (W.todense())
+    # print("delta v. pred", best_loss - old_loss, bits_as_vec.dot(W.dot(bits_as_vec.T)), best_loss)
 
     for idx in range(len(current_hashes)):
         bits_as_vec[0, idx] = - bits_as_vec[0, idx]
-        print("flip", idx, bits_as_vec.dot(W.dot(bits_as_vec.T)))
+        # print("flip", idx, bits_as_vec.dot(W.dot(bits_as_vec.T)))
         bits_as_vec[0, idx] = - bits_as_vec[0, idx]
     best_new_hashes = [h * 2 + o for h, o in zip(current_hashes, best_new_bits)]
     return best_new_hashes
@@ -309,13 +356,61 @@ def hinged_triplet_loss(h1, h2, h3, bitlen):
     return max(0, bitlen / 2.0 - bitdiff)
 
 if __name__ == '__main__':
-    labels = ([0] * 3) + ([1] * 3) + ([3] * 5) + ([4] * 5)
-    hashes = [0] * 3 + [1] * 3 + [5] * 5 + list(range(5))
-    l = 4
-    for iter in range(64):
-        print("\n\n\nITER")
-        print(iter)
-        hashes = find_next_bits(hashes, labels, hinged_triplet_loss, l)
-        l = l + 1
-        for h in hashes:
-            print(bin(h)[2:].zfill(l))
+
+    import os
+
+    import yaml
+    import numpy as np
+    import scipy.io as sio
+
+    import train
+
+    with open('./config.yaml', 'r') as f:
+        config = yaml.load(f)
+
+    config = train.proc_configs(config)
+
+    batch_size = 50
+    bits_per_group = 8
+    bits_num = 16
+    total_group = bits_num / bits_per_group
+
+    ds_train_file = './preprocessing/preprocessed_data/labels/train_labels.mat'
+    print 'loading dataset...'
+
+    temp_train = sio.loadmat(ds_train_file)
+
+    train_datapath = './preprocessing/preprocessed_data/train_hkl/'
+
+    train_frameDir = dir(train_datapath)
+    nb_files = len([name for name in os.listdir(train_datapath) if os.path.isfile(os.path.join(train_datapath, name))])
+    train_e_num = nb_files * batch_size
+
+    labels = temp_train['train_labels'][0][:train_e_num]
+    # labels = temp_train['train_labels'][0][:100]
+
+    hashes = [0] * len(labels)
+
+    for group_idx in range(total_group):
+
+        update_bit = group_idx * bits_per_group
+
+        print 'group index ' + str(group_idx)
+
+        for iter in range(bits_per_group):
+            print("\n\n\nITER")
+            print(iter)
+
+            hashes = find_next_bits(hashes, labels, hinged_triplet_loss, update_bit)
+
+            hash_step1_code = []
+            for h in hashes:
+                temp_hash = bin(h)[2:].zfill(update_bit)
+                hash_step1_code.append(temp_hash[-1]) #  TODO modified here, test it again
+
+            hash_step1_code = {'hash_step1_code': hash_step1_code}
+            sio.savemat('./step1/temp/hash_step1_code_' + str(update_bit + 1) + '.mat', hash_step1_code)
+
+            update_bit += 1
+
+        train.train_net(config)
