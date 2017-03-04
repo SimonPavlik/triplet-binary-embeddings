@@ -8,11 +8,9 @@ label_data=train_data.label_data;
 assert(size(label_data, 1)==e_num);
 assert(size(label_data, 2)==1);
 
-maximum_sample_num = 500;
+maximum_sample_num = 5;
 
-
-
-triplet_samples_idxes = [];
+triplet_samples_idxes = ones(maximum_sample_num * e_num, 3);
 
 for e_idx = 1:e_num
 
@@ -23,21 +21,20 @@ for e_idx = 1:e_num
     relevant_idxes=find(relevant_sel);
     irrelevant_idxes=find(irrelevant_sel);
 
-    [A, B] = meshgrid(relevant_idxes, irrelevant_idxes);
+    sub_relevant_idxes = randsample(relevant_idxes, maximum_sample_num);
+    sub_irrelevant_idxes = randsample(irrelevant_idxes, maximum_sample_num);
 
-    total_triplet_samples_idxes = [A(:) B(:)];
-
-    bias = repmat(e_idx, size(total_triplet_samples_idxes,1), 1);
-
-    sub_triplet_samples_idxes = [bias, total_triplet_samples_idxes];
+    bias = e_idx * ones(maximum_sample_num, 1);
 
 
-    sub_triplet_samples_idxes=sub_triplet_samples_idxes(randsample(size(sub_triplet_samples_idxes, 1), maximum_sample_num), :);
-   
+    sub_triplet_samples_idxes = [bias, sub_relevant_idxes, sub_irrelevant_idxes];
 
-    triplet_samples_idxes = cat(1, triplet_samples_idxes, sub_triplet_samples_idxes);
-    
+    if e_idx == 1
+        triplet_samples_idxes(1:maximum_sample_num, :) = sub_triplet_samples_idxes;
+    else
+        triplet_samples_idxes((e_idx - 1) * maximum_sample_num + 1:e_idx * maximum_sample_num, :) = sub_triplet_samples_idxes;
 
+    end
 end
 
 end
